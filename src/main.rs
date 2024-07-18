@@ -42,11 +42,7 @@ async fn main() {
 
     // Configure our command framework
     let options = poise::FrameworkOptions {
-        commands: vec![deafen(), undeafen(), join(), leave(), play()],
-        prefix_options: poise::PrefixFrameworkOptions {
-            prefix: Some(String::from("~")),
-            ..Default::default()
-        },
+        commands: vec![deafen(), undeafen(), join(), leave(), queue()],
         ..Default::default()
     };
 
@@ -54,15 +50,10 @@ async fn main() {
     let manager_clone = Arc::clone(&manager);
     let framework = poise::Framework::new(options, |_, _, _| {
         Box::pin(async {
-            Ok(
-                // We create a global HTTP client here to make use of in
-                // `~play`. If we wanted, we could supply cookies and auth
-                // details ahead of time.
-                UserData {
-                    http: HttpClient::new(),
-                    songbird: manager_clone,
-                },
-            )
+            Ok(UserData {
+                http: HttpClient::new(),
+                songbird: manager_clone,
+            })
         })
     });
 
@@ -86,7 +77,7 @@ async fn main() {
     println!("Received Ctrl-C, shutting down.");
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn deafen(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
     let manager = &ctx.data().songbird;
@@ -115,7 +106,7 @@ async fn deafen(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn join(ctx: Context<'_>) -> CommandResult {
     let (guild_id, channel_id) = {
         let guild = ctx.guild().unwrap();
@@ -142,6 +133,8 @@ async fn join(ctx: Context<'_>) -> CommandResult {
         handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
     }
 
+    check_msg(ctx.say("Hi").await);
+
     Ok(())
 }
 
@@ -164,7 +157,7 @@ impl VoiceEventHandler for TrackErrorNotifier {
     }
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
 
@@ -184,7 +177,7 @@ async fn leave(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn mute(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
     let manager = &ctx.data().songbird;
@@ -213,14 +206,14 @@ async fn mute(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn ping(ctx: Context<'_>) -> CommandResult {
     check_msg(ctx.say("Pong!").await);
     Ok(())
 }
 
-#[poise::command(prefix_command, guild_only)]
-async fn play(ctx: Context<'_>, url: String) -> CommandResult {
+#[poise::command(slash_command, guild_only)]
+async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
     let do_search = !url.starts_with("http");
 
     let guild_id = ctx.guild_id().unwrap();
@@ -244,7 +237,7 @@ async fn play(ctx: Context<'_>, url: String) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn undeafen(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
     let manager = &ctx.data().songbird;
@@ -263,7 +256,7 @@ async fn undeafen(ctx: Context<'_>) -> CommandResult {
     Ok(())
 }
 
-#[poise::command(prefix_command, guild_only)]
+#[poise::command(slash_command, guild_only)]
 async fn unmute(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
     let manager = &ctx.data().songbird;
