@@ -1,16 +1,13 @@
 use std::env;
 use std::sync::Arc;
 
-use serenity::all as serenity;
-
-// Event related imports to detect track creation failures.
-use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
-
-// To turn user URLs into playable audio, we'll use yt-dlp.
-use songbird::input::YoutubeDl;
-
-// YtDl requests need an HTTP client to operate -- we'll create and store our own.
+use poise::CreateReply;
 use reqwest::Client as HttpClient;
+use serenity::all as serenity;
+use serenity::all::GatewayIntents;
+use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
+use songbird::input::YoutubeDl;
+use tracing::{error, info};
 
 struct UserData {
     http: HttpClient,
@@ -26,7 +23,7 @@ struct Handler;
 #[serenity::async_trait]
 impl serenity::EventHandler for Handler {
     async fn ready(&self, _: serenity::Context, ready: serenity::Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
     }
 }
 
@@ -42,7 +39,7 @@ async fn main() {
 
     // Configure our command framework
     let options = poise::FrameworkOptions {
-        commands: vec![join(), leave(), queue()],
+        commands: vec![join(), leave(), queue(), skip(), stop()],
         ..Default::default()
     };
 
@@ -57,8 +54,7 @@ async fn main() {
         })
     });
 
-    let intents =
-        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = serenity::Client::builder(&token, intents)
         .voice_manager_arc(manager)
         .event_handler(Handler)
@@ -70,11 +66,11 @@ async fn main() {
         let _ = client
             .start()
             .await
-            .map_err(|why| println!("Client ended: {:?}", why));
+            .map_err(|why| error!("Client ended: {:?}", why));
     });
 
     let _signal_err = tokio::signal::ctrl_c().await;
-    println!("Received Ctrl-C, shutting down.");
+    info!("Received Ctrl-C, shutting down.");
 }
 
 #[poise::command(slash_command, guild_only)]
@@ -89,22 +85,19 @@ async fn join(ctx: Context<'_>) -> CommandResult {
         (guild.id, channel_id)
     };
 
-    let connect_to = match channel_id {
-        Some(channel) => channel,
-        None => {
-            check_msg(ctx.reply("Not in a voice channel").await);
-            return Ok(());
-        }
+    let Some(connect_to) = channel_id else {
+        check_msg(ctx.reply("Not in a voice channel").await);
+        return Ok(());
     };
 
-    let manager = &ctx.data().songbird;
+    let manager = ctx.data().songbird.as_ref();
     if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
         // Attach an event handler to see notifications of all track errors.
         let mut handler = handler_lock.lock().await;
         handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
     }
 
-    check_msg(ctx.say("Hi").await);
+    check_msg(ctx.say("Hiiiiiii!!!!").await);
 
     Ok(())
 }
@@ -116,7 +109,7 @@ impl VoiceEventHandler for TrackErrorNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
             for (state, handle) in *track_list {
-                println!(
+                info!(
                     "Track {:?} encountered an error: {:?}",
                     handle.uuid(),
                     state.playing
@@ -132,7 +125,7 @@ impl VoiceEventHandler for TrackErrorNotifier {
 async fn leave(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
 
-    let manager = &ctx.data().songbird;
+    let manager = ctx.data().songbird.as_ref();
     let has_handler = manager.get(guild_id).is_some();
 
     if has_handler {
@@ -155,7 +148,9 @@ async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
     let data = ctx.data();
 
-    if let Some(handler_lock) = data.songbird.get(guild_id) {
+    let message = ctx.reply("Fetching...").await.unwrap();
+
+    let msg = if let Some(handler_lock) = ctx.data().songbird.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
         let src = if do_search {
@@ -163,11 +158,65 @@ async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
         } else {
             YoutubeDl::new(data.http.clone(), url)
         };
-        let _ = handler.play_input(src.into());
+        handler.enqueue_input(src.into()).await;
 
-        check_msg(ctx.say("Playing song").await);
+        CreateReply::default().content("Queued song").reply(true)
     } else {
-        check_msg(ctx.say("Not in a voice channel to play in").await);
+        CreateReply::default()
+            .content("Not in a voice channel to play in")
+            .reply(true)
+    };
+
+    if let Err(why) = message.edit(ctx, msg).await {
+        error!("Error sending message: {:?}", why);
+    }
+
+    Ok(())
+}
+
+#[poise::command(slash_command, guild_only)]
+async fn skip(ctx: Context<'_>) -> CommandResult {
+    let guild_id = ctx.guild_id().unwrap();
+
+    let message = ctx.reply("Skipping...").await.unwrap();
+
+    let msg = if let Some(handler_lock) = ctx.data().songbird.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        let _ = handler.queue().skip();
+
+        CreateReply::default().content("Skipped").reply(true)
+    } else {
+        CreateReply::default()
+            .content("Not in a voice channel to play in")
+            .reply(true)
+    };
+
+    if let Err(why) = message.edit(ctx, msg).await {
+        error!("Error sending message: {:?}", why);
+    }
+
+    Ok(())
+}
+
+#[poise::command(slash_command, guild_only)]
+async fn stop(ctx: Context<'_>) -> CommandResult {
+    let guild_id = ctx.guild_id().unwrap();
+
+    let message = ctx.reply("Stopping...").await.unwrap();
+
+    let msg = if let Some(handler_lock) = ctx.data().songbird.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        handler.queue().stop();
+
+        CreateReply::default().content("Stopped").reply(true)
+    } else {
+        CreateReply::default()
+            .content("Not in a voice channel to play in")
+            .reply(true)
+    };
+
+    if let Err(why) = message.edit(ctx, msg).await {
+        error!("Error sending message: {:?}", why);
     }
 
     Ok(())
@@ -176,6 +225,6 @@ async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
 /// Checks that a message successfully sent; if not, then logs why to stdout.
 fn check_msg<T>(result: serenity::Result<T>) {
     if let Err(why) = result {
-        println!("Error sending message: {:?}", why);
+        error!("Error sending message: {:?}", why);
     }
 }
