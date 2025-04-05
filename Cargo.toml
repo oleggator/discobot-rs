@@ -6,13 +6,12 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "*", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "*", default-features = false }
 serenity = { version = "0.12", features = [
     "cache",
     "framework",
     "voice",
     "http",
-    "rustls_backend",
 ] }
 songbird = { version = "0.5", default-features = true, features = [
     "builtin-queue",
@@ -23,3 +22,12 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 tracing-futures = "0.2"
 poise = { version = "0.6", default-features = false, features = ["cache"] }
+
+[features]
+default = ["rustls"]
+rustls = ["reqwest/rustls-tls", "serenity/rustls_backend", "songbird/rustls"]
+native-tls = [
+    "reqwest/native-tls",
+    "serenity/native_tls_backend",
+    "songbird/native",
+]
