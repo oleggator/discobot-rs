@@ -6,16 +6,25 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "*", default-features = false }
-serenity = { version = "0.12", features = [
+#  A Rust library for the Discord API.
+serenity = { version = "0.12", default-features = false, features = [
+    "default_no_backend",
     "cache",
     "framework",
     "voice",
     "http",
 ] }
-songbird = { version = "0.5", default-features = true, features = [
+
+#  An async Rust library for the Discord voice API.
+songbird = { version = "0.5", default-features = false, features = [
+    "driver",
+    "gateway",
+    "serenity",
+    "tungstenite",
     "builtin-queue",
 ] }
+
+reqwest = { version = "0.12", default-features = false }
 symphonia = { version = "0.5", features = ["aac", "mp3", "isomp4", "alac"] }
 tokio = { version = "1", features = ["macros", "signal", "sync"] }
 tracing = "0.1"
