@@ -81,7 +81,9 @@ async fn join(ctx: Context<'_>) -> CommandResult {
     };
 
     let Some(connect_to) = channel_id else {
-        check_msg(ctx.reply("Not in a voice channel").await);
+        if let Err(why) = ctx.reply("Not in a voice channel").await {
+            error!("Error sending message: {:?}", why);
+        }
         return Ok(());
     };
 
@@ -92,7 +94,9 @@ async fn join(ctx: Context<'_>) -> CommandResult {
         handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
     }
 
-    check_msg(ctx.say("Hiiiiiii!!!!").await);
+    if let Err(why) = ctx.say("Hiiiiiii!!!!").await {
+        error!("Error sending message: {:?}", why);
+    }
 
     Ok(())
 }
@@ -119,18 +123,24 @@ impl VoiceEventHandler for TrackErrorNotifier {
 #[poise::command(slash_command, guild_only)]
 async fn leave(ctx: Context<'_>) -> CommandResult {
     let guild_id = ctx.guild_id().unwrap();
-
     let manager = ctx.data().songbird.as_ref();
-    let has_handler = manager.get(guild_id).is_some();
 
-    if has_handler {
-        if let Err(e) = manager.remove(guild_id).await {
-            check_msg(ctx.say(format!("Failed: {:?}", e)).await);
+    if manager.get(guild_id).is_none() {
+        if let Err(why) = ctx.reply("Not in a voice channel").await {
+            error!("Error sending message: {:?}", why);
         }
 
-        check_msg(ctx.say("Left voice channel").await);
-    } else {
-        check_msg(ctx.reply("Not in a voice channel").await);
+        return Ok(());
+    }
+
+    if let Err(e) = manager.remove(guild_id).await {
+        if let Err(why) = ctx.say(format!("Failed: {e:?}")).await {
+            error!("Error sending message: {:?}", why);
+        }
+    }
+
+    if let Err(why) = ctx.say("Left voice channel").await {
+        error!("Error sending message: {:?}", why);
     }
 
     Ok(())
@@ -163,7 +173,7 @@ async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
     };
 
     if let Err(why) = message.edit(ctx, msg).await {
-        error!("Error sending message: {:?}", why);
+        error!("Error editing message: {:?}", why);
     }
 
     Ok(())
@@ -187,7 +197,7 @@ async fn skip(ctx: Context<'_>) -> CommandResult {
     };
 
     if let Err(why) = message.edit(ctx, msg).await {
-        error!("Error sending message: {:?}", why);
+        error!("Error editing message: {:?}", why);
     }
 
     Ok(())
@@ -211,15 +221,8 @@ async fn stop(ctx: Context<'_>) -> CommandResult {
     };
 
     if let Err(why) = message.edit(ctx, msg).await {
-        error!("Error sending message: {:?}", why);
+        error!("Error editing message: {:?}", why);
     }
 
     Ok(())
-}
-
-/// Checks that a message successfully sent; if not, then logs why to stdout.
-fn check_msg<T>(result: serenity::Result<T>) {
-    if let Err(why) = result {
-        error!("Error sending message: {:?}", why);
-    }
 }
