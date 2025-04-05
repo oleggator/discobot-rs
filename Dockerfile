@@ -5,21 +5,18 @@ RUN apk add --no-cache musl-dev cmake make
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-
-# Copy the actual source code
 COPY src ./src
 
-RUN cargo build --release
+RUN --mount=type=cache,sharing=private,target=/app/target \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --release \
+    && cp /app/target/release/discobot-rs /usr/local/bin/discobot
 
 
 FROM alpine:latest AS runner
 
 RUN apk add --no-cache yt-dlp ffmpeg
 
-WORKDIR /app
+COPY --from=builder /usr/local/bin/discobot /usr/local/bin/discobot
 
-COPY --from=builder /app/target/release/discobot-rs .
-
-CMD ["./discobot-rs"]
+CMD ["/usr/local/bin/discobot"]
