@@ -1,0 +1,16 @@
+# fly.toml app configuration file generated for discobot-rs on 2025-04-13T19:46:58+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'discobot-rs'
+primary_region = 'ams'
+
+[build]
+image = "ghcr.io/oleggator/discobot-rs:latest"
+
+[deploy]
+strategy = "rolling"
+
+[[vm]]
+size = 'shared-cpu-1x'
