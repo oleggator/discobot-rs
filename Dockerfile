@@ -1,4 +1,4 @@
-FROM rust:1-alpine AS builder
+FROM rust:1-alpine3.22 AS builder
 
 RUN apk add --no-cache musl-dev cmake make
 
@@ -13,7 +13,7 @@ RUN --mount=type=cache,sharing=private,target=/app/target \
     && cp /app/target/release/discobot-rs /usr/local/bin/discobot
 
 
-FROM alpine:latest AS runner
+FROM alpine:3.22 AS runner
 
 RUN apk add --no-cache yt-dlp ffmpeg
 
