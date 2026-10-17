@@ -1,11 +1,16 @@
+use std::time::Duration;
+
 use poise::CreateReply;
 use songbird::events::TrackEvent;
-use songbird::input::YoutubeDl;
-use tracing::error;
+use songbird::input::{Compose, YoutubeDl};
+use tracing::{error, warn};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, super::UserData, Error>;
 type CommandResult = Result<(), Error>;
+
+/// How long yt-dlp gets to find a track before `/queue` gives up.
+const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[poise::command(slash_command, guild_only)]
 pub async fn join(ctx: Context<'_>) -> CommandResult {
@@ -76,16 +81,33 @@ pub async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
     let message = ctx.reply("Fetching...").await.unwrap();
 
     let msg = if let Some(handler_lock) = ctx.data().songbird.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-
-        let src = if do_search {
+        let mut src = if do_search {
             YoutubeDl::new_search(data.http.clone(), url)
         } else {
             YoutubeDl::new(data.http.clone(), url)
         };
-        handler.enqueue_input(src.into()).await;
 
-        CreateReply::default().content("Queued song").reply(true)
+        // Look the track up before taking the call lock. Enqueueing needs the track's metadata
+        // and would otherwise run yt-dlp while holding the lock, blocking /skip, /stop and
+        // /leave; the result is cached on `src`, so songbird reuses it.
+        match tokio::time::timeout(LOOKUP_TIMEOUT, src.aux_metadata()).await {
+            Ok(Ok(_)) => {
+                let mut handler = handler_lock.lock().await;
+                handler.enqueue_input(src.into()).await;
+
+                CreateReply::default().content("Queued song").reply(true)
+            }
+            Ok(Err(why)) => {
+                warn!("Error looking up track: {:?}", why);
+
+                CreateReply::default()
+                    .content("Couldn't load that track")
+                    .reply(true)
+            }
+            Err(_) => CreateReply::default()
+                .content("Timed out loading that track")
+                .reply(true),
+        }
     } else {
         CreateReply::default()
             .content("Not in a voice channel to play in")
