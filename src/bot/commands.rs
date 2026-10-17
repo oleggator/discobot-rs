@@ -81,7 +81,11 @@ pub async fn queue(ctx: Context<'_>, url: String) -> CommandResult {
         let src = if do_search {
             YoutubeDl::new_search(data.http.clone(), url)
         } else {
+            // Turn off yt-dlp's generic extractor, which fetches any URL it is given and would
+            // let users make the bot send requests to internal addresses. Links to the sites
+            // yt-dlp has a dedicated extractor for still work.
             YoutubeDl::new(data.http.clone(), url)
+                .user_args(vec!["--use-extractors".into(), "default,-generic".into()])
         };
         handler.enqueue_input(src.into()).await;
 
