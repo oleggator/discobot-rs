@@ -15,7 +15,17 @@ RUN --mount=type=cache,sharing=private,target=/app/target \
 
 FROM alpine:3.22 AS runner
 
-RUN apk add --no-cache yt-dlp ffmpeg
+# yt-dlp has to keep up with YouTube, so install the latest release from PyPI when the image
+# is built rather than Alpine's package. Its "default" extra includes yt-dlp-ejs, which solves
+# YouTube's JavaScript challenges using Deno. ffmpeg isn't needed: songbird decodes audio itself.
+# Alpine's Python ships without ensurepip, so the venv is created without pip and filled using
+# Alpine's pip, which is removed again afterwards.
+RUN apk add --no-cache deno python3 \
+    && apk add --no-cache --virtual .pip py3-pip \
+    && python3 -m venv --without-pip /opt/yt-dlp \
+    && pip --python /opt/yt-dlp/bin/python install --no-cache-dir "yt-dlp[default]" \
+    && apk del .pip \
+    && ln -s /opt/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp
 
 COPY --from=builder /usr/local/bin/discobot /usr/local/bin/discobot
 
