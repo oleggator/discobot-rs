@@ -19,4 +19,9 @@ RUN apk add --no-cache yt-dlp ffmpeg
 
 COPY --from=builder /usr/local/bin/discobot /usr/local/bin/discobot
 
+# yt-dlp fetches user-supplied links, so don't run as root. The home directory holds
+# yt-dlp's cache.
+RUN adduser -D discobot
+USER discobot
+
 CMD ["/usr/local/bin/discobot"]
