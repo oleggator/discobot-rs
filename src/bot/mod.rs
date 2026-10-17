@@ -6,7 +6,7 @@ use reqwest::Client as HttpClient;
 use serenity::all as serenity;
 use serenity::all::GatewayIntents;
 use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler};
-use tracing::info;
+use tracing::{error, info};
 
 pub struct Bot {
     client: serenity::Client,
@@ -31,8 +31,16 @@ impl Bot {
 
         // We have to clone our voice manager's Arc to share it between serenity and our user data.
         let manager_clone = Arc::clone(&manager);
-        let framework = poise::Framework::new(options, |_, _, _| {
-            Box::pin(async {
+        let framework = poise::Framework::new(options, |ctx, _, framework| {
+            Box::pin(async move {
+                // Slash commands only show up in Discord once registered. Log failures instead
+                // of returning them: a failed setup leaves poise without user data, and every
+                // command would then hang.
+                let commands = &framework.options().commands;
+                if let Err(why) = poise::builtins::register_globally(ctx, commands).await {
+                    error!("Error registering commands: {:?}", why);
+                }
+
                 Ok(UserData {
                     http: HttpClient::new(),
                     songbird: manager_clone,
