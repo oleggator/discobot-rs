@@ -54,6 +54,10 @@ impl Bot {
     pub async fn start(&mut self) -> Result<(), serenity::Error> {
         self.client.start().await
     }
+
+    pub fn shard_manager(&self) -> Arc<serenity::ShardManager> {
+        Arc::clone(&self.client.shard_manager)
+    }
 }
 
 struct UserData {
