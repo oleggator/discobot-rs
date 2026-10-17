@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     name: Deploy app
+    # workflow_run fires for failed and cancelled builds too.
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     concurrency: deploy-group
     steps:
