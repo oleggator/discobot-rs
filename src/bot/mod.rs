@@ -40,7 +40,8 @@ impl Bot {
             })
         });
 
-        let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+        // Slash commands arrive as interactions, so no privileged intents are needed.
+        let intents = GatewayIntents::non_privileged();
         let client = serenity::Client::builder(token, intents)
             .voice_manager_arc(manager)
             .event_handler(Handler)
