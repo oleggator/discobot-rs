@@ -30,7 +30,7 @@ tokio = { version = "1", features = ["macros", "signal", "sync"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 tracing-futures = "0.2"
-poise = { version = "0.6", default-features = false, features = ["cache"] }
+poise = { version = "0.6", default-features = false, features = ["cache", "handle_panics"] }
 
 [features]
 default = ["rustls"]
