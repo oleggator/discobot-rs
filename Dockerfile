@@ -1,6 +1,10 @@
-FROM rust:1-alpine3.22 AS builder
+FROM rust:1-alpine3.24 AS builder
 
 RUN apk add --no-cache musl-dev cmake make
+
+# audiopus_sys builds its bundled Opus with `cmake_minimum_required(VERSION 3.1)`, which
+# CMake 4 rejects unless told to treat it as 3.5.
+ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
 
 WORKDIR /app
 
@@ -13,7 +17,7 @@ RUN --mount=type=cache,sharing=private,target=/app/target \
     && cp /app/target/release/discobot-rs /usr/local/bin/discobot
 
 
-FROM alpine:3.22 AS runner
+FROM alpine:3.24 AS runner
 
 # yt-dlp has to keep up with YouTube, so install the latest release from PyPI when the image
 # is built rather than Alpine's package. Its "default" extra includes yt-dlp-ejs, which solves
