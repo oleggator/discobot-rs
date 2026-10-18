@@ -1,5 +1,9 @@
 name: Build container image
 on:
+  schedule:
+    # Rebuild weekly to pick up new yt-dlp releases, which follow YouTube's changes.
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
   push:
     branches:
       - master
